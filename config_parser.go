@@ -17,7 +17,7 @@ func parseConfig(filename string) (map[string]interface{}, error) {
 		yp := &YamlParser{}
 		return yp.parse(filename)
 	} else if strings.HasSuffix(lowerFilename, ".rainbow") {
-		rp := &RainbowParser{}
+		rp := &Rainbow{}
 		return rp.parse(filename)
 	}
 

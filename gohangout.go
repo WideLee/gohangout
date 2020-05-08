@@ -2,6 +2,10 @@ package main
 
 import (
 	"flag"
+	"github.com/childe/gohangout/input"
+	"github.com/childe/gohangout/topology"
+	"github.com/golang/glog"
+	jsoniter "github.com/json-iterator/go"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -10,16 +14,12 @@ import (
 	"runtime/pprof"
 	"sync"
 	"syscall"
-
-	"github.com/childe/gohangout/input"
-	"github.com/childe/gohangout/topology"
-	"github.com/golang/glog"
-	jsoniter "github.com/json-iterator/go"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 var options = &struct {
 	config     string
+	autoReload bool // 配置文件更新自动重启
 	pprof      bool
 	pprofAddr  string
 	cpuprofile string
@@ -38,6 +38,7 @@ var (
 
 func init() {
 	flag.StringVar(&options.config, "config", options.config, "path to configuration file or directory")
+	flag.BoolVar(&options.autoReload, "reload", options.autoReload, "if auto reload while config file changed")
 
 	flag.BoolVar(&options.pprof, "pprof", false, "if pprof")
 	flag.StringVar(&options.pprofAddr, "pprof-address", "127.0.0.1:8899", "default: 127.0.0.1:8899")
@@ -105,34 +106,84 @@ func main() {
 		}()
 	}
 
-	config, err := parseConfig(options.config)
-	if err != nil {
-		glog.Fatalf("could not parse config:%s", err)
-	}
-	glog.Infof("%v", config)
-
-	boxes := buildPluginLink(config)
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		for {
-			<-c
-			signal.Stop(c)
-			for _, box := range boxes {
-				box.Shutdown()
-			}
+		for cfg := range configChannel {
+			StopBoxesBeat()
+			boxes = buildPluginLink(cfg)
+
+			go StartBoxesBeat()
 		}
 	}()
 
+	// 初始化配置文件
+	if options.autoReload {
+		if err := watchConfig(options.config, configChannel); err != nil {
+			glog.Fatalf("watch config fail: %s", err)
+		}
+	} else {
+		config, err := parseConfig(options.config)
+		if err != nil {
+			glog.Fatalf("could not parse config:%s", err)
+		}
+		glog.Infof("%v", config)
+		configChannel <- config
+	}
+
+	ListenSignal()
+}
+
+var boxes []*input.InputBox
+var configChannel = make(chan map[string]interface{})
+
+func StartBoxesBeat() {
 	var wg sync.WaitGroup
 	wg.Add(len(boxes))
-	defer wg.Wait()
 
 	for i := range boxes {
 		go func(i int) {
 			defer wg.Done()
 			boxes[i].Beat(*worker)
 		}(i)
+	}
+
+	wg.Wait()
+}
+
+func StopBoxesBeat() {
+	for _, box := range boxes {
+		box.Shutdown()
+	}
+
+	boxes = make([]*input.InputBox, 0)
+}
+
+func ListenSignal() {
+	c := make(chan os.Signal, 1)
+	var stop bool
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGUSR2)
+
+	defer glog.Infof("listen signal stop, exit...")
+
+	for sig := range c {
+		glog.Infof("capture signal: %v", sig)
+		switch sig {
+		case syscall.SIGINT, syscall.SIGTERM:
+			StopBoxesBeat()
+			close(configChannel)
+			stop = true
+		case syscall.SIGUSR1:
+			// 重新加载
+			config, err := parseConfig(options.config)
+			if err != nil {
+				glog.Errorf("could not parse config:%s", err)
+				continue
+			}
+			glog.Infof("%v", config)
+			configChannel <- config
+		}
+
+		if stop {
+			break
+		}
 	}
 }
