@@ -1,6 +1,7 @@
 package input
 
 import (
+	"git.code.oa.com/going/attr"
 	"reflect"
 	"sync"
 
@@ -54,6 +55,7 @@ func (box *InputBox) beat(workerIdx int) {
 
 	for !box.stop {
 		event = box.input.ReadOneEvent()
+		attr.AttrAPI(35174965, 1) // yahangout_beat
 		if event == nil {
 			if !box.stop {
 				glog.Info("receive nil message. shutdown...")

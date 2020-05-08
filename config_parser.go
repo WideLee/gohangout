@@ -16,6 +16,10 @@ func parseConfig(filename string) (map[string]interface{}, error) {
 	if strings.HasSuffix(lowerFilename, ".yaml") || strings.HasSuffix(lowerFilename, ".yml") {
 		yp := &YamlParser{}
 		return yp.parse(filename)
+	} else if strings.HasSuffix(lowerFilename, ".rainbow") {
+		rp := &RainbowParser{}
+		return rp.parse(filename)
 	}
-	return nil, errors.New("unknown config format. config filename should ends with yaml|yml")
+
+	return nil, errors.New("unknown config format")
 }

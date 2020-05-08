@@ -129,7 +129,7 @@ func main() {
 	wg.Add(len(boxes))
 	defer wg.Wait()
 
-	for i, _ := range boxes {
+	for i := range boxes {
 		go func(i int) {
 			defer wg.Done()
 			boxes[i].Beat(*worker)
