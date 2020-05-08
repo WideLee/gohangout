@@ -79,7 +79,8 @@ func buildPluginLink(config map[string]interface{}) (boxes []*input.InputBox, er
 			boxes = append(boxes, box)
 		}
 	}
-	return boxes
+	
+	return
 }
 
 func main() {
