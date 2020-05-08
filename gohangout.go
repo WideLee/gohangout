@@ -84,6 +84,8 @@ func buildPluginLink(config map[string]interface{}) (boxes []*input.InputBox, er
 }
 
 func main() {
+	defer glog.Flush()
+
 	if options.pprof {
 		go func() {
 			http.ListenAndServe(options.pprofAddr, nil)
