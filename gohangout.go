@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/childe/gohangout/input"
 	"github.com/childe/gohangout/topology"
 	"github.com/golang/glog"
@@ -52,8 +53,14 @@ func init() {
 	printVersion()
 }
 
-func buildPluginLink(config map[string]interface{}) []*input.InputBox {
-	boxes := make([]*input.InputBox, 0)
+func buildPluginLink(config map[string]interface{}) (boxes []*input.InputBox, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("[PANIC] %v", e)
+		}
+	}()
+
+	boxes = make([]*input.InputBox, 0)
 
 	for inputIdx, inputI := range config["inputs"].([]interface{}) {
 		var inputPlugin topology.Input
@@ -109,9 +116,13 @@ func main() {
 	go func() {
 		for cfg := range configChannel {
 			StopBoxesBeat()
-			boxes = buildPluginLink(cfg)
-
-			go StartBoxesBeat()
+			newBoxes, err := buildPluginLink(cfg)
+			if err == nil {
+				boxes = newBoxes
+				go StartBoxesBeat()
+			} else {
+				glog.Errorf("build plugin link fail: %s", err)
+			}
 		}
 	}()
 
